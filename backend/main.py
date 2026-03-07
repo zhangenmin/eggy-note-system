@@ -15,7 +15,6 @@ SQLALCHEMY_DATABASE_URL = "mysql+pymysql://root:Jschrj83130911!@localhost/eggy_n
 engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# 强制同步表结构
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -32,6 +31,9 @@ class NoteSaveRequest(BaseModel):
     type: str = "block"
     summary: Optional[str] = None
     content_json: dict
+
+class NotebookCreate(BaseModel):
+    name: str
 
 def get_db():
     db = SessionLocal()
@@ -55,17 +57,56 @@ def list_notebooks(db: Session = Depends(get_db)):
         return [new_book]
     return books
 
+@app.post("/api/notebook/create")
+async def create_notebook(data: NotebookCreate, db: Session = Depends(get_db)):
+    try:
+        new_book = models.NoteBook(name=data.name, user_id=1)
+        db.add(new_book)
+        db.commit()
+        db.refresh(new_book)
+        return new_book
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/notebook/{book_id}")
+async def update_notebook(book_id: int, data: NotebookCreate, db: Session = Depends(get_db)):
+    try:
+        book = db.query(models.NoteBook).filter(models.NoteBook.book_id == book_id).first()
+        if not book:
+            raise HTTPException(status_code=404, detail="Notebook not found")
+        book.name = data.name
+        db.commit()
+        return book
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/notebook/{book_id}")
+async def delete_notebook(book_id: int, db: Session = Depends(get_db)):
+    try:
+        book = db.query(models.NoteBook).filter(models.NoteBook.book_id == book_id).first()
+        if not book:
+            raise HTTPException(status_code=404, detail="Notebook not found")
+        # 统计是否还有笔记，防止误删
+        note_count = db.query(models.Note).filter(models.Note.book_id == book_id).count()
+        if note_count > 0:
+            raise HTTPException(status_code=400, detail=f"该笔记本下还有 {note_count} 篇笔记，请先删除笔记")
+        db.delete(book)
+        db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/note/list")
 def list_notes(book_id: int = None, db: Session = Depends(get_db)):
-    # 联调 NoteBlock 获取内容
     query = db.query(models.Note)
     if book_id:
         query = query.filter(models.Note.book_id == book_id)
     notes = query.all()
-    
     result = []
     for n in notes:
-        # 获取第一层内容作为预览/回显
         block = db.query(models.NoteBlock).filter(models.NoteBlock.note_id == n.note_id).first()
         result.append({
             "note_id": n.note_id,
@@ -78,60 +119,44 @@ def list_notes(book_id: int = None, db: Session = Depends(get_db)):
     return result
 
 @app.post("/api/note/save/{note_id}")
-async def save_note(note_id: int, data: NoteSaveRequest, db: Session = Depends(get_db)):
-    logger.info(f"SAVE START - ID: {note_id}")
+async def save_note(note_id: int, data: NoteSaveRequest, db: Session = Depends(get_db), book_id: int = 1):
+    # 此处 book_id 逻辑由前端通过 query 参数或 body 传入更佳，暂时默认为当前笔记本
     try:
         content_text = data.content_json.get("content", "")
-        
         if note_id == 0:
-            note = models.Note(book_id=1, title=data.title, type=data.type, summary=data.summary)
+            note = models.Note(book_id=book_id, title=data.title, type=data.type, summary=data.summary)
             db.add(note)
             db.commit()
             db.refresh(note)
             note_id = note.note_id
         else:
             note = db.query(models.Note).filter(models.Note.note_id == note_id).first()
-            if not note:
-                note = models.Note(book_id=1, title=data.title, type=data.type, summary=data.summary)
-                db.add(note)
-                db.commit()
-                db.refresh(note)
-                note_id = note.note_id
-            else:
+            if note:
                 note.title = data.title
                 note.type = data.type
                 note.summary = data.summary
         
-        # 写入或更新内容到 NoteBlock
         block = db.query(models.NoteBlock).filter(models.NoteBlock.note_id == note_id).first()
         if not block:
             block = models.NoteBlock(note_id=note_id, type='text', content=content_text, order_num=0)
             db.add(block)
         else:
             block.content = content_text
-            
         db.commit()
-        logger.info(f"SAVE SUCCESS - Final ID: {note_id}")
         return {"status": "success", "note_id": note_id}
     except Exception as e:
-        logger.error(f"SAVE ERROR: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/note/{note_id}")
 async def delete_note(note_id: int, db: Session = Depends(get_db)):
-    logger.info(f"DELETE START - ID: {note_id}")
     try:
         note = db.query(models.Note).filter(models.Note.note_id == note_id).first()
-        if not note:
-            raise HTTPException(status_code=404, detail="Note not found")
-        
-        db.delete(note)
-        db.commit()
-        logger.info(f"DELETE SUCCESS - ID: {note_id}")
+        if note:
+            db.delete(note)
+            db.commit()
         return {"status": "success"}
     except Exception as e:
-        logger.error(f"DELETE ERROR: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
