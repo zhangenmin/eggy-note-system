@@ -3,11 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>蛋仔笔记系统 - v1.6 (Markdown 增强版)</title>
+    <title>蛋仔笔记系统 - v1.7 (代码增强版)</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 Markdown 解析库和高亮库 -->
+    <!-- Markdown 解析 -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 代码高亮 Prism.js -->
+    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css/github-markdown.min.css">
     <style>
         .note-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
@@ -19,7 +24,12 @@
         .delete-btn { opacity: 0; transition: opacity 0.2s; }
         .note-card:hover .delete-btn { opacity: 1; }
         .markdown-body { padding: 0 !important; background: transparent !important; }
-        pre { background-color: #f6f8fa !important; border-radius: 6px; padding: 16px !important; }
+        /* 代码块样式优化 */
+        pre[class*="language-"] {
+            margin: 1.5em 0 !important;
+            border-radius: 8px !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+        }
     </style>
 </head>
 <body class="bg-gray-50 font-sans text-gray-900">
@@ -56,33 +66,23 @@
 
         <!-- Main Workspace -->
         <div class="flex-1 flex flex-col relative">
-            <!-- Header -->
             <header class="h-16 bg-white border-b px-8 flex items-center justify-between shadow-sm z-10">
                 <div class="flex items-center space-x-4">
                     <h2 class="text-lg font-bold text-gray-700">
                         {{ isCreating ? '新建笔记' : (editingNote ? '正在编辑' : (currentBook?.name || '笔记概览')) }}
                     </h2>
-                    <span v-if="!editingNote && !isCreating" class="text-sm text-gray-400">({{ notes.length }} 篇笔记)</span>
                 </div>
                 <div class="flex space-x-2">
                     <template v-if="editingNote || isCreating">
-                        <button @click="saveNote" class="bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700 transition-all font-bold shadow-sm">
-                            💾 保存同步
-                        </button>
-                        <button @click="cancelEdit" class="bg-gray-100 text-gray-600 px-5 py-2 rounded-lg hover:bg-gray-200 transition-all">
-                            取消
-                        </button>
+                        <button @click="saveNote" class="bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700 transition-all font-bold shadow-sm">💾 保存同步</button>
+                        <button @click="cancelEdit" class="bg-gray-100 text-gray-600 px-5 py-2 rounded-lg hover:bg-gray-200 transition-all">取消</button>
                     </template>
                     <template v-else>
-                        <button @click="handleCreateClick" class="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition-all flex items-center space-x-1 font-bold shadow-md">
-                            <span>+</span>
-                            <span>新建笔记</span>
-                        </button>
+                        <button @click="handleCreateClick" class="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition-all flex items-center space-x-1 font-bold shadow-md"><span>+</span><span>新建笔记</span></button>
                     </template>
                 </div>
             </header>
 
-            <!-- Content Area -->
             <main class="flex-1 overflow-y-auto p-8">
                 <div v-if="!editingNote && !isCreating">
                     <div v-if="loading" class="flex items-center justify-center h-full mt-20">
@@ -90,14 +90,12 @@
                     </div>
                     <div v-else-if="notes.length === 0" class="flex flex-col items-center justify-center h-full text-gray-400 mt-20">
                         <div class="text-6xl mb-4 animate-bounce">📝</div>
-                        <p class="text-lg">笔记本空空的，快点击右上角开启您的第一个笔记吧！</p>
+                        <p class="text-lg">笔记本空空的，快开启您的创作吧！</p>
                     </div>
                     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         <div v-for="note in notes" :key="note.note_id" @click="startEdit(note)" class="note-card relative bg-white p-6 rounded-xl border border-gray-100 shadow-sm cursor-pointer transition-all">
                             <button @click.stop="deleteNote(note.note_id)" class="delete-btn absolute top-4 right-4 text-gray-400 hover:text-red-500 p-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
                             <h3 class="font-bold text-gray-800 mb-2 truncate text-lg pr-8">{{ note.title }}</h3>
                             <p class="text-sm text-gray-500 line-clamp-3 mb-4 h-12">{{ note.content || '暂无内容...' }}</p>
@@ -120,17 +118,18 @@
                         </div>
                         
                         <div v-if="formModel.type === 'markdown'" class="grid grid-cols-2 gap-8">
-                            <!-- Markdown 编辑区 -->
                             <div class="border-r pr-8">
-                                <h4 class="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">编辑</h4>
-                                <textarea v-model="formModel.content" 
+                                <div class="flex justify-between items-center mb-4">
+                                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-widest">编辑 (支持代码高亮)</h4>
+                                    <button @click="insertCodeBlock" class="text-[10px] bg-gray-100 px-2 py-1 rounded hover:bg-gray-200 text-gray-600">插入代码块</button>
+                                </div>
+                                <textarea v-model="formModel.content" @input="handleMarkdownInput"
                                           class="w-full min-h-[500px] border-none outline-none text-base leading-relaxed placeholder-gray-200 resize-none font-mono" 
-                                          placeholder="输入 Markdown 内容..."></textarea>
+                                          placeholder="输入 Markdown... ```python \n print('hello') \n ```"></textarea>
                             </div>
-                            <!-- Markdown 预览区 -->
                             <div class="overflow-y-auto max-h-[600px]">
                                 <h4 class="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">预览</h4>
-                                <div class="markdown-body" v-html="renderMarkdown(formModel.content)"></div>
+                                <div class="markdown-body" v-html="renderedHtml"></div>
                             </div>
                         </div>
 
@@ -151,7 +150,7 @@
     </div>
 
     <script>
-        const { createApp, ref, onMounted, reactive } = Vue
+        const { createApp, ref, onMounted, reactive, watch, nextTick } = Vue
         createApp({
             setup() {
                 const notebooks = ref([])
@@ -161,6 +160,7 @@
                 const editingNote = ref(null)
                 const isCreating = ref(false)
                 const formModel = reactive({ title: '', type: 'block', content: '', summary: '' })
+                const renderedHtml = ref('')
 
                 const fetchData = async () => {
                     try {
@@ -225,6 +225,7 @@
                     isCreating.value = true
                     editingNote.value = null
                     formModel.title = ''; formModel.type = 'block'; formModel.content = ''; formModel.summary = '';
+                    renderedHtml.value = ''
                 }
 
                 const startEdit = (note) => {
@@ -234,6 +235,7 @@
                     formModel.type = note.type || 'block'
                     formModel.content = note.content || ''
                     formModel.summary = note.summary || ''
+                    if (formModel.type === 'markdown') handleMarkdownInput()
                 }
 
                 const cancelEdit = () => { editingNote.value = null; isCreating.value = false; }
@@ -268,14 +270,27 @@
                     } catch (e) { alert("删除失败") }
                 }
 
-                const renderMarkdown = (text) => {
-                    if (!text) return ''
-                    return marked.parse(text)
+                const handleMarkdownInput = () => {
+                    renderedHtml.value = marked.parse(formModel.content)
+                    nextTick(() => {
+                        Prism.highlightAll()
+                    })
                 }
+
+                const insertCodeBlock = () => {
+                    const template = "\n```javascript\n// 在这里输入代码\nconsole.log('Hello World');\n```\n"
+                    formModel.content += template
+                    handleMarkdownInput()
+                }
+
+                watch(() => formModel.type, (newType) => {
+                    if (newType === 'markdown') handleMarkdownInput()
+                })
 
                 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : '刚刚'
                 onMounted(fetchData)
-                return { notebooks, notes, currentBook, loading, editingNote, isCreating, formModel, selectBook, promptCreateBook, promptEditBook, deleteBook, handleCreateClick, startEdit, saveNote, cancelEdit, deleteNote, renderMarkdown, formatDate }
+
+                return { notebooks, notes, currentBook, loading, editingNote, isCreating, formModel, renderedHtml, selectBook, promptCreateBook, promptEditBook, deleteBook, handleCreateClick, startEdit, saveNote, cancelEdit, deleteNote, handleMarkdownInput, insertCodeBlock, formatDate }
             }
         }).mount('#app')
     </script>
