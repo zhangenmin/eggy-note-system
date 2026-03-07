@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>蛋仔笔记系统 - v1.3 (内容同步版)</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .note-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .sidebar-item:hover { background-color: #f3f4f6; }
+        .sidebar-item.active { background-color: #eff6ff; color: #2563eb; border-right: 4px solid #2563eb; }
+        .editor-container { background: white; min-height: 500px; border-radius: 12px; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans text-gray-900">
+    <div id="app" class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <div class="w-64 bg-white border-r flex flex-col">
+            <div class="p-6 border-b flex items-center space-x-2">
+                <span class="text-2xl">🥚</span>
+                <h1 class="text-xl font-bold text-gray-800">蛋仔笔记</h1>
+            </div>
+            <div class="flex-1 overflow-y-auto py-4">
+                <div class="px-4 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">我的笔记本</div>
+                <div v-for="book in notebooks" :key="book.book_id" 
+                     @click="selectBook(book)"
+                     :class="['sidebar-item px-6 py-3 cursor-pointer transition-all flex items-center space-x-2', currentBook?.book_id === book.book_id ? 'active' : 'text-gray-600']">
+                    <span>{{ currentBook?.book_id === book.book_id ? '📂' : '📁' }}</span>
+                    <span>{{ book.name }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Workspace -->
+        <div class="flex-1 flex flex-col relative">
+            <!-- Header -->
+            <header class="h-16 bg-white border-b px-8 flex items-center justify-between shadow-sm z-10">
+                <div class="flex items-center space-x-4">
+                    <h2 class="text-lg font-bold text-gray-700">
+                        {{ isCreating ? '新建笔记' : (editingNote ? '正在编辑' : (currentBook?.name || '笔记概览')) }}
+                    </h2>
+                    <span v-if="!editingNote && !isCreating" class="text-sm text-gray-400">({{ notes.length }} 篇笔记)</span>
+                </div>
+                <div class="flex space-x-2">
+                    <template v-if="editingNote || isCreating">
+                        <button @click="saveNote" class="bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700 transition-all font-bold shadow-sm">
+                            💾 保存同步
+                        </button>
+                        <button @click="cancelEdit" class="bg-gray-100 text-gray-600 px-5 py-2 rounded-lg hover:bg-gray-200 transition-all">
+                            取消
+                        </button>
+                    </template>
+                    <template v-else>
+                        <button @click="handleCreateClick" class="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition-all flex items-center space-x-1 font-bold shadow-md">
+                            <span>+</span>
+                            <span>新建笔记</span>
+                        </button>
+                    </template>
+                </div>
+            </header>
+
+            <!-- Content Area -->
+            <main class="flex-1 overflow-y-auto p-8">
+                <div v-if="!editingNote && !isCreating">
+                    <div v-if="loading" class="flex items-center justify-center h-full mt-20">
+                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    </div>
+                    <div v-else-if="notes.length === 0" class="flex flex-col items-center justify-center h-full text-gray-400 mt-20">
+                        <div class="text-6xl mb-4 animate-bounce">📝</div>
+                        <p class="text-lg">笔记本空空的，快点击右上角开启您的第一个“块”笔记吧！</p>
+                    </div>
+                    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate__animated animate__fadeIn">
+                        <div v-for="note in notes" :key="note.note_id" @click="startEdit(note)" class="note-card bg-white p-6 rounded-xl border border-gray-100 shadow-sm cursor-pointer transition-all">
+                            <h3 class="font-bold text-gray-800 mb-2 truncate text-lg">{{ note.title }}</h3>
+                            <p class="text-sm text-gray-500 line-clamp-3 mb-4 h-12">{{ note.content || '暂无内容...' }}</p>
+                            <div class="flex items-center justify-between border-t pt-4">
+                                <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold">{{ note.type.toUpperCase() }}</span>
+                                <span class="text-[10px] text-gray-400 italic">{{ formatDate(note.updated_at) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-else class="max-w-4xl mx-auto animate__animated animate__zoomIn">
+                    <div class="editor-container p-10 shadow-2xl border border-gray-50 bg-white">
+                        <input v-model="formModel.title" class="w-full text-5xl font-black border-none outline-none mb-8 placeholder-gray-100 text-gray-800" placeholder="笔记标题">
+                        
+                        <div class="flex items-center space-x-6 mb-8 border-b border-gray-100 pb-4">
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="radio" v-model="formModel.type" value="block" class="w-4 h-4 text-blue-600">
+                                <span :class="formModel.type === 'block' ? 'text-blue-600 font-bold' : 'text-gray-400'">块模式</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="radio" v-model="formModel.type" value="cornell" class="w-4 h-4 text-blue-600">
+                                <span :class="formModel.type === 'cornell' ? 'text-blue-600 font-bold' : 'text-gray-400'">康奈尔模式</span>
+                            </label>
+                        </div>
+
+                        <div class="prose prose-lg max-w-none">
+                            <textarea v-model="formModel.content" 
+                                      class="w-full min-h-[500px] border-none outline-none text-xl leading-relaxed placeholder-gray-200 resize-none" 
+                                      placeholder="在这里输入笔记内容..."></textarea>
+                        </div>
+                        
+                        <div v-if="formModel.type === 'cornell'" class="mt-10 p-6 bg-yellow-50 rounded-2xl border-2 border-dashed border-yellow-200">
+                            <h4 class="text-xs font-bold text-yellow-700 mb-3 uppercase tracking-widest">📋 康奈尔总结栏</h4>
+                            <textarea v-model="formModel.summary" class="w-full bg-transparent border-none outline-none text-gray-700" placeholder="写下总结..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, reactive } = Vue
+        createApp({
+            setup() {
+                const notebooks = ref([])
+                const notes = ref([])
+                const currentBook = ref(null)
+                const loading = ref(true)
+                const editingNote = ref(null)
+                const isCreating = ref(false)
+                const formModel = reactive({ title: '', type: 'block', content: '', summary: '' })
+
+                const fetchData = async () => {
+                    try {
+                        loading.value = true
+                        const res = await fetch('/api/notebook/list')
+                        notebooks.value = await res.json()
+                        if (notebooks.value.length > 0) selectBook(notebooks.value[0])
+                        else loading.value = false
+                    } catch (e) { loading.value = false }
+                }
+
+                const selectBook = async (book) => {
+                    currentBook.value = book
+                    loading.value = true
+                    editingNote.value = null
+                    isCreating.value = false
+                    try {
+                        const res = await fetch(`/api/note/list?book_id=${book.book_id}`)
+                        notes.value = await res.json()
+                    } finally { loading.value = false }
+                }
+
+                const handleCreateClick = () => {
+                    isCreating.value = true
+                    editingNote.value = null
+                    formModel.title = ''; formModel.type = 'block'; formModel.content = ''; formModel.summary = '';
+                }
+
+                const startEdit = (note) => {
+                    editingNote.value = note
+                    isCreating.value = false
+                    formModel.title = note.title
+                    formModel.type = note.type || 'block'
+                    formModel.content = note.content || ''
+                    formModel.summary = note.summary || ''
+                }
+
+                const cancelEdit = () => { editingNote.value = null; isCreating.value = false; }
+
+                const saveNote = async () => {
+                    if (!formModel.title) { alert('请输入标题！'); return }
+                    const noteId = editingNote.value ? editingNote.value.note_id : 0
+                    try {
+                        const res = await fetch(`/api/note/save/${noteId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                title: formModel.title,
+                                type: formModel.type,
+                                summary: formModel.summary,
+                                content_json: { content: formModel.content }
+                            })
+                        })
+                        if (res.ok) {
+                            isCreating.value = false; editingNote.value = null; selectBook(currentBook.value);
+                        } else {
+                            const err = await res.json(); alert("保存失败: " + JSON.stringify(err));
+                        }
+                    } catch (e) { alert("网络异常: " + e.message); }
+                }
+
+                const formatDate = (d) => d ? new Date(d).toLocaleDateString() : '刚刚'
+                onMounted(fetchData)
+                return { notebooks, notes, currentBook, loading, editingNote, isCreating, formModel, selectBook, handleCreateClick, startEdit, saveNote, cancelEdit, formatDate }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
