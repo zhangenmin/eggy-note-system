@@ -58,7 +58,11 @@ def list_notebooks(db: Session = Depends(get_db)):
 @app.get("/api/note/list")
 def list_notes(book_id: int = None, db: Session = Depends(get_db)):
     # 联调 NoteBlock 获取内容
-    notes = db.query(models.Note).filter(models.Note.book_id == book_id).all()
+    query = db.query(models.Note)
+    if book_id:
+        query = query.filter(models.Note.book_id == book_id)
+    notes = query.all()
+    
     result = []
     for n in notes:
         # 获取第一层内容作为预览/回显
@@ -111,6 +115,23 @@ async def save_note(note_id: int, data: NoteSaveRequest, db: Session = Depends(g
         return {"status": "success", "note_id": note_id}
     except Exception as e:
         logger.error(f"SAVE ERROR: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/note/{note_id}")
+async def delete_note(note_id: int, db: Session = Depends(get_db)):
+    logger.info(f"DELETE START - ID: {note_id}")
+    try:
+        note = db.query(models.Note).filter(models.Note.note_id == note_id).first()
+        if not note:
+            raise HTTPException(status_code=404, detail="Note not found")
+        
+        db.delete(note)
+        db.commit()
+        logger.info(f"DELETE SUCCESS - ID: {note_id}")
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"DELETE ERROR: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 

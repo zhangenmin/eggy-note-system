@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>蛋仔笔记系统 - v1.3 (内容同步版)</title>
+    <title>蛋仔笔记系统 - v1.4 (功能增强版)</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -11,6 +11,8 @@
         .sidebar-item:hover { background-color: #f3f4f6; }
         .sidebar-item.active { background-color: #eff6ff; color: #2563eb; border-right: 4px solid #2563eb; }
         .editor-container { background: white; min-height: 500px; border-radius: 12px; }
+        .delete-btn { opacity: 0; transition: opacity 0.2s; }
+        .note-card:hover .delete-btn { opacity: 1; }
     </style>
 </head>
 <body class="bg-gray-50 font-sans text-gray-900">
@@ -68,11 +70,18 @@
                     </div>
                     <div v-else-if="notes.length === 0" class="flex flex-col items-center justify-center h-full text-gray-400 mt-20">
                         <div class="text-6xl mb-4 animate-bounce">📝</div>
-                        <p class="text-lg">笔记本空空的，快点击右上角开启您的第一个“块”笔记吧！</p>
+                        <p class="text-lg">笔记本空空的，快点击右上角开启您的第一个笔记吧！</p>
                     </div>
-                    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate__animated animate__fadeIn">
-                        <div v-for="note in notes" :key="note.note_id" @click="startEdit(note)" class="note-card bg-white p-6 rounded-xl border border-gray-100 shadow-sm cursor-pointer transition-all">
-                            <h3 class="font-bold text-gray-800 mb-2 truncate text-lg">{{ note.title }}</h3>
+                    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div v-for="note in notes" :key="note.note_id" @click="startEdit(note)" class="note-card relative bg-white p-6 rounded-xl border border-gray-100 shadow-sm cursor-pointer transition-all">
+                            <!-- 删除按钮 -->
+                            <button @click.stop="deleteNote(note.note_id)" class="delete-btn absolute top-4 right-4 text-gray-400 hover:text-red-500 p-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+
+                            <h3 class="font-bold text-gray-800 mb-2 truncate text-lg pr-8">{{ note.title }}</h3>
                             <p class="text-sm text-gray-500 line-clamp-3 mb-4 h-12">{{ note.content || '暂无内容...' }}</p>
                             <div class="flex items-center justify-between border-t pt-4">
                                 <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold">{{ note.type.toUpperCase() }}</span>
@@ -82,7 +91,7 @@
                     </div>
                 </div>
 
-                <div v-else class="max-w-4xl mx-auto animate__animated animate__zoomIn">
+                <div v-else class="max-w-4xl mx-auto">
                     <div class="editor-container p-10 shadow-2xl border border-gray-50 bg-white">
                         <input v-model="formModel.title" class="w-full text-5xl font-black border-none outline-none mb-8 placeholder-gray-100 text-gray-800" placeholder="笔记标题">
                         
@@ -185,9 +194,21 @@
                     } catch (e) { alert("网络异常: " + e.message); }
                 }
 
+                const deleteNote = async (id) => {
+                    if (!confirm('确定要删除这篇笔记吗？此操作不可撤销。')) return
+                    try {
+                        const res = await fetch(`/api/note/${id}`, { method: 'DELETE' })
+                        if (res.ok) {
+                            selectBook(currentBook.value)
+                        } else {
+                            alert("删除失败")
+                        }
+                    } catch (e) { alert("删除异常: " + e.message) }
+                }
+
                 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : '刚刚'
                 onMounted(fetchData)
-                return { notebooks, notes, currentBook, loading, editingNote, isCreating, formModel, selectBook, handleCreateClick, startEdit, saveNote, cancelEdit, formatDate }
+                return { notebooks, notes, currentBook, loading, editingNote, isCreating, formModel, selectBook, handleCreateClick, startEdit, saveNote, cancelEdit, deleteNote, formatDate }
             }
         }).mount('#app')
     </script>
