@@ -17,7 +17,7 @@ class Note(Base):
     note_id = Column(BigInteger, primary_key=True, autoincrement=True)
     book_id = Column(BigInteger, ForeignKey('note_book.book_id', ondelete='CASCADE'))
     title = Column(String(255), default='未命名笔记')
-    type = Column(Enum('cornell', 'block'), default='block')
+    type = Column(Enum('cornell', 'block', 'markdown'), default='block')
     summary = Column(Text)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

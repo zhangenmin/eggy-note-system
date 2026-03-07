@@ -3,9 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>蛋仔笔记系统 - v1.5 (多笔记本管理)</title>
+    <title>蛋仔笔记系统 - v1.6 (Markdown 增强版)</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Markdown 解析库和高亮库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css/github-markdown.min.css">
     <style>
         .note-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .sidebar-item:hover { background-color: #f3f4f6; }
@@ -15,6 +18,8 @@
         .editor-container { background: white; min-height: 500px; border-radius: 12px; }
         .delete-btn { opacity: 0; transition: opacity 0.2s; }
         .note-card:hover .delete-btn { opacity: 1; }
+        .markdown-body { padding: 0 !important; background: transparent !important; }
+        pre { background-color: #f6f8fa !important; border-radius: 6px; padding: 16px !important; }
     </style>
 </head>
 <body class="bg-gray-50 font-sans text-gray-900">
@@ -104,24 +109,37 @@
                     </div>
                 </div>
 
-                <div v-else class="max-w-4xl mx-auto">
+                <div v-else class="max-w-6xl mx-auto">
                     <div class="editor-container p-10 shadow-2xl border border-gray-50 bg-white">
-                        <input v-model="formModel.title" class="w-full text-5xl font-black border-none outline-none mb-8 placeholder-gray-100 text-gray-800" placeholder="笔记标题">
+                        <input v-model="formModel.title" class="w-full text-4xl font-black border-none outline-none mb-6 placeholder-gray-100 text-gray-800" placeholder="笔记标题">
                         <div class="flex items-center space-x-6 mb-8 border-b border-gray-100 pb-4">
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="radio" v-model="formModel.type" value="block" class="w-4 h-4 text-blue-600">
-                                <span :class="formModel.type === 'block' ? 'text-blue-600 font-bold' : 'text-gray-400'">块模式</span>
-                            </label>
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="radio" v-model="formModel.type" value="cornell" class="w-4 h-4 text-blue-600">
-                                <span :class="formModel.type === 'cornell' ? 'text-blue-600 font-bold' : 'text-gray-400'">康奈尔模式</span>
+                            <label v-for="m in ['block', 'cornell', 'markdown']" :key="m" class="flex items-center space-x-2 cursor-pointer">
+                                <input type="radio" v-model="formModel.type" :value="m" class="w-4 h-4 text-blue-600">
+                                <span :class="formModel.type === m ? 'text-blue-600 font-bold' : 'text-gray-400'">{{ m === 'block' ? '块模式' : (m === 'cornell' ? '康奈尔' : 'Markdown') }}</span>
                             </label>
                         </div>
-                        <div class="prose prose-lg max-w-none">
+                        
+                        <div v-if="formModel.type === 'markdown'" class="grid grid-cols-2 gap-8">
+                            <!-- Markdown 编辑区 -->
+                            <div class="border-r pr-8">
+                                <h4 class="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">编辑</h4>
+                                <textarea v-model="formModel.content" 
+                                          class="w-full min-h-[500px] border-none outline-none text-base leading-relaxed placeholder-gray-200 resize-none font-mono" 
+                                          placeholder="输入 Markdown 内容..."></textarea>
+                            </div>
+                            <!-- Markdown 预览区 -->
+                            <div class="overflow-y-auto max-h-[600px]">
+                                <h4 class="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">预览</h4>
+                                <div class="markdown-body" v-html="renderMarkdown(formModel.content)"></div>
+                            </div>
+                        </div>
+
+                        <div v-else class="prose prose-lg max-w-none">
                             <textarea v-model="formModel.content" 
                                       class="w-full min-h-[500px] border-none outline-none text-xl leading-relaxed placeholder-gray-200 resize-none" 
                                       placeholder="在这里输入笔记内容..."></textarea>
                         </div>
+
                         <div v-if="formModel.type === 'cornell'" class="mt-10 p-6 bg-yellow-50 rounded-2xl border-2 border-dashed border-yellow-200">
                             <h4 class="text-xs font-bold text-yellow-700 mb-3 uppercase tracking-widest">📋 康奈尔总结栏</h4>
                             <textarea v-model="formModel.summary" class="w-full bg-transparent border-none outline-none text-gray-700" placeholder="写下总结..."></textarea>
@@ -250,9 +268,14 @@
                     } catch (e) { alert("删除失败") }
                 }
 
+                const renderMarkdown = (text) => {
+                    if (!text) return ''
+                    return marked.parse(text)
+                }
+
                 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : '刚刚'
                 onMounted(fetchData)
-                return { notebooks, notes, currentBook, loading, editingNote, isCreating, formModel, selectBook, promptCreateBook, promptEditBook, deleteBook, handleCreateClick, startEdit, saveNote, cancelEdit, deleteNote, formatDate }
+                return { notebooks, notes, currentBook, loading, editingNote, isCreating, formModel, selectBook, promptCreateBook, promptEditBook, deleteBook, handleCreateClick, startEdit, saveNote, cancelEdit, deleteNote, renderMarkdown, formatDate }
             }
         }).mount('#app')
     </script>
