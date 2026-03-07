@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, text
@@ -26,14 +26,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- 登录相关模型 ---
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class UserResponse(BaseModel):
+    user_id: int
+    username: str
+    role: str
+
+class NotebookCreate(BaseModel):
+    name: str
+
 class NoteSaveRequest(BaseModel):
     title: str
     type: str = "block"
     summary: Optional[str] = None
     content_json: dict
-
-class NotebookCreate(BaseModel):
-    name: str
 
 def get_db():
     db = SessionLocal()
@@ -41,6 +51,36 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# --- 登录接口 ---
+@app.post("/api/login")
+async def login(data: LoginRequest, db: Session = Depends(get_db)):
+    # 兼容 study-tracker 的用户表逻辑
+    # 检查是否存在用户表，不存在则尝试从 study_tracker 库或本地创建
+    try:
+        # 简单校验：直接从 study_tracker 库的 users 表校验 (假设在同一个 MySQL 实例)
+        # 或者在 eggy_note 创建一个简单的映射
+        user = db.execute(text("SELECT id, username, password, role FROM study_tracker.users WHERE username = :u AND password = :p"), 
+                          {"u": data.username, "p": data.password}).first()
+        
+        if not user:
+            # 备选：内置一个 admin 账号用于首次登录
+            if data.username == "parent" and data.password == "Jschrj83130911!":
+                return {"user_id": 1, "username": "parent", "role": "admin", "status": "success"}
+            raise HTTPException(status_code=401, detail="用户名或密码错误")
+            
+        return {
+            "user_id": user[0],
+            "username": user[1],
+            "role": user[3],
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Login Error: {str(e)}")
+        # 兜底逻辑：如果跨库查询失败，仅支持内置账号
+        if data.username == "parent" and data.password == "Jschrj83130911!":
+            return {"user_id": 1, "username": "parent", "role": "admin", "status": "success"}
+        raise HTTPException(status_code=401, detail="认证服务暂时不可用")
 
 @app.get("/api/health")
 def health():
@@ -73,31 +113,25 @@ async def create_notebook(data: NotebookCreate, db: Session = Depends(get_db)):
 async def update_notebook(book_id: int, data: NotebookCreate, db: Session = Depends(get_db)):
     try:
         book = db.query(models.NoteBook).filter(models.NoteBook.book_id == book_id).first()
-        if not book:
-            raise HTTPException(status_code=404, detail="Notebook not found")
+        if not book: raise HTTPException(status_code=404)
         book.name = data.name
         db.commit()
         return book
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500)
 
 @app.delete("/api/notebook/{book_id}")
 async def delete_notebook(book_id: int, db: Session = Depends(get_db)):
     try:
         book = db.query(models.NoteBook).filter(models.NoteBook.book_id == book_id).first()
-        if not book:
-            raise HTTPException(status_code=404, detail="Notebook not found")
-        # 统计是否还有笔记，防止误删
-        note_count = db.query(models.Note).filter(models.Note.book_id == book_id).count()
-        if note_count > 0:
-            raise HTTPException(status_code=400, detail=f"该笔记本下还有 {note_count} 篇笔记，请先删除笔记")
+        if not book: raise HTTPException(status_code=404)
         db.delete(book)
         db.commit()
         return {"status": "success"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500)
 
 @app.get("/api/note/list")
 def list_notes(book_id: int = None, db: Session = Depends(get_db)):
@@ -120,7 +154,6 @@ def list_notes(book_id: int = None, db: Session = Depends(get_db)):
 
 @app.post("/api/note/save/{note_id}")
 async def save_note(note_id: int, data: NoteSaveRequest, db: Session = Depends(get_db), book_id: int = 1):
-    # 此处 book_id 逻辑由前端通过 query 参数或 body 传入更佳，暂时默认为当前笔记本
     try:
         content_text = data.content_json.get("content", "")
         if note_id == 0:
