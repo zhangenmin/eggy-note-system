@@ -24,32 +24,77 @@
         .note-card:hover .delete-btn { opacity: 1; }
         .markdown-body { padding: 0 !important; background: transparent !important; }
         pre[class*="language-"] { margin: 1.5em 0 !important; border-radius: 8px !important; }
+
+        /* 星空背景样式 */
+        .stars-wrapper {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+            overflow: hidden;
+            z-index: 0;
+        }
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.5;
+            animation: twinkle var(--duration) infinite ease-in-out;
+        }
+        @keyframes twinkle {
+            0%, 100% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.5); opacity: 1; }
+        }
+
+        /* 玻璃质感登录框 */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        .glass-input {
+            background: rgba(255, 255, 255, 0.05) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            color: white !important;
+        }
+        .glass-input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
     </style>
 </head>
 <body class="bg-gray-50 font-sans text-gray-900">
     <div id="app" class="h-screen overflow-hidden">
         
         <!-- 登录界面 -->
-        <div v-if="!user" class="h-full flex items-center justify-center bg-blue-50">
-            <div class="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-md animate__animated animate__fadeIn">
+        <div v-if="!user" class="h-full flex items-center justify-center relative">
+            <!-- 动态星空 -->
+            <div class="stars-wrapper">
+                <div v-for="n in 150" :key="n" class="star" :style="generateStarStyle()"></div>
+            </div>
+
+            <div class="glass-card p-10 rounded-3xl w-full max-w-md z-10 animate__animated animate__fadeIn">
                 <div class="text-center mb-8">
                     <span class="text-6xl mb-4 block">🥚</span>
-                    <h1 class="text-3xl font-black text-gray-800">蛋仔笔记系统</h1>
-                    <p class="text-gray-400 mt-2 italic text-sm">灵感与代码的避风港</p>
+                    <h1 class="text-3xl font-black text-white">蛋仔笔记系统</h1>
+                    <p class="text-blue-200 mt-2 italic text-sm">灵感与代码的避风港</p>
                 </div>
                 <div class="space-y-6">
                     <div>
-                        <label class="block text-sm font-bold text-gray-600 mb-2">用户名</label>
-                        <input v-model="loginForm.username" type="text" class="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 outline-none focus:ring-2 focus:ring-blue-400" placeholder="请输入用户名">
+                        <label class="block text-sm font-bold text-gray-300 mb-2">用户名</label>
+                        <input v-model="loginForm.username" type="text" class="glass-input w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" placeholder="请输入用户名">
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-gray-600 mb-2">密码</label>
-                        <input v-model="loginForm.password" type="password" class="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 outline-none focus:ring-2 focus:ring-blue-400" placeholder="请输入密码" @keyup.enter="login">
+                        <label class="block text-sm font-bold text-gray-300 mb-2">密码</label>
+                        <input v-model="loginForm.password" type="password" class="glass-input w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" placeholder="请输入密码" @keyup.enter="login">
                     </div>
                     <button @click="login" :disabled="isLoggingIn" class="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg active:scale-95 disabled:opacity-50">
                         {{ isLoggingIn ? '正在验证...' : '进入我的笔记' }}
                     </button>
-                    <p v-if="errorMsg" class="text-red-500 text-center text-xs mt-4">{{ errorMsg }}</p>
+                    <p v-if="errorMsg" class="text-red-400 text-center text-xs mt-4 font-bold">{{ errorMsg }}</p>
                 </div>
             </div>
         </div>
@@ -210,9 +255,16 @@
                 const handleMarkdownInput = () => { renderedHtml.value = marked.parse(formModel.content); nextTick(() => Prism.highlightAll()) }
                 const insertCodeBlock = () => { formModel.content += "\n```javascript\n// Code here\n```\n"; handleMarkdownInput() }
                 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : '刚刚'
+                const generateStarStyle = () => {
+                    const top = Math.random() * 100 + '%'
+                    const left = Math.random() * 100 + '%'
+                    const size = Math.random() * 3 + 'px'
+                    const duration = (Math.random() * 3 + 2) + 's'
+                    return { top, left, width: size, height: size, '--duration': duration }
+                }
 
                 onMounted(() => { if (user.value) fetchData() })
-                return { user, loginForm, isLoggingIn, errorMsg, notebooks, notes, currentBook, loading, editingNote, isCreating, formModel, renderedHtml, login, logout, selectBook, promptCreateBook, handleCreateClick, startEdit, saveNote, cancelEdit, deleteNote, handleMarkdownInput, insertCodeBlock, formatDate }
+                return { user, loginForm, isLoggingIn, errorMsg, notebooks, notes, currentBook, loading, editingNote, isCreating, formModel, renderedHtml, login, logout, selectBook, promptCreateBook, handleCreateClick, startEdit, saveNote, cancelEdit, deleteNote, handleMarkdownInput, insertCodeBlock, formatDate, generateStarStyle }
             }
         }).mount('#app')
     </script>
