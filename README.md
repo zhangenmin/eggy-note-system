@@ -99,6 +99,73 @@ python3 main.py
 - 用户名: `parent`
 - 密码: `Jschrj83130911!`
 
+## 🐳 Docker 部署（推荐）
+
+一键部署，无需手动安装依赖和配置数据库。
+
+### 前提条件
+- [Docker](https://docs.docker.com/engine/install/) (20.10+)
+- [Docker Compose](https://docs.docker.com/compose/install/) (v2.0+)
+
+### 部署步骤
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/zhangenmin/eggy-note-system.git
+cd eggy-note-system
+
+# 2. 构建并启动（首次需下载镜像，约1-2分钟）
+docker compose up -d
+
+# 3. 查看启动日志
+docker compose logs -f
+
+# 4. 打开浏览器访问
+# http://localhost:8080
+```
+
+### 架构说明
+
+```
+┌─────────────────────────────────────┐
+│  docker-compose.yml                 │
+│  ┌──────────────┐  ┌──────────────┐ │
+│  │ chuhuai-     │  │ chuhuai-     │ │
+│  │ mysql        │◄─┤ note (app)   │ │
+│  │ (:3306)      │  │ (:80 → 8080) │ │
+│  └──────────────┘  └──────┬───────┘ │
+│                           │         │
+│                    Nginx(前端静态)   │
+│                    + FastAPI(后端)   │
+└─────────────────────────────────────┘
+```
+
+### 服务详情
+
+| 服务 | 容器名 | 镜像 | 端口 |
+|------|--------|------|------|
+| **App** | `chuhuai-note` | 自动构建 | `8080:80` |
+| **MySQL** | `chuhuai-mysql` | `mysql:8.0` | `3306` (内部) |
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `MYSQL_HOST` | `mysql` | 数据库地址 |
+| `MYSQL_USER` | `root` | 数据库用户 |
+| `MYSQL_PASSWORD` | `Jschrj83130911!` | 数据库密码 |
+| `MYSQL_DB` | `eggy_note` | 数据库名 |
+
+### Docker 文件
+
+| 文件 | 作用 |
+|------|------|
+| `Dockerfile` | Ubuntu 24.04 + Nginx + Python 虚拟环境 |
+| `docker-compose.yml` | MySQL 8.0 + App 服务编排 |
+| `nginx.conf` | 反向代理 / 静态文件服务 |
+| `start.sh` | 启动脚本（等待 MySQL → 初始化 → 启动服务） |
+| `.dockerignore` | 构建排除 venv/、pycache/ |
+
 ## 📂 项目结构
 ```
 ├── backend/
@@ -114,6 +181,11 @@ python3 main.py
 │   └── src/                 # Vue 组件源码
 ├── deploy/                  # 旧版部署参考
 ├── init_db.sql              # 数据库建表脚本
+├── Dockerfile               # 镜像构建
+├── docker-compose.yml       # 容器编排
+├── nginx.conf               # Nginx 配置
+├── start.sh                 # 容器启动脚本
+├── .dockerignore            # Docker 构建排除
 └── README.md
 ```
 

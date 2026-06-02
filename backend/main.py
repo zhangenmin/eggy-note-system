@@ -6,12 +6,18 @@ from sqlalchemy.orm import sessionmaker
 from app import models
 from pydantic import BaseModel
 from typing import List, Optional
+import os
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-SQLALCHEMY_DATABASE_URL = "mysql+pymysql://root:Jschrj83130911!@localhost/eggy_note"
+MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
+MYSQL_USER = os.environ.get('MYSQL_USER', 'root')
+MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', 'Jschrj83130911!')
+MYSQL_DB = os.environ.get('MYSQL_DB', 'eggy_note')
+
+SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}/{MYSQL_DB}"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
