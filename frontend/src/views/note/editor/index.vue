@@ -81,7 +81,7 @@ const editor = new Editor({
     Mathematics, // 注册 LaTeX 公式扩展
   ],
   content: `
-    <h2>欢迎使用蛋仔笔记  v1.1 🚀</h2>
+    <h2>欢迎使用楚淮笔记  v1.1 🚀</h2>
     <p>这是一个<strong>深度定制</strong>的学术级编辑器。</p>
     <div data-type="mathematics" latex="f(x) = \\int_{-\\infty}^{\\infty} \\hat{f}(\\xi) e^{2\\pi i x \\xi} d\\xi"></div>
     <p>点击上方公式试试看！</p>

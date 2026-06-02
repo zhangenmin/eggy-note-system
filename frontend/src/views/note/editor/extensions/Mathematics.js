@@ -3,7 +3,7 @@ import { VueNodeViewRenderer } from '@tiptap/vue-3'
 import MathematicsView from './MathematicsView.vue'
 
 /**
- * 蛋仔笔记 LaTeX 公式扩展
+ * 楚淮笔记 LaTeX 公式扩展
  * 实现所见即所得的公式编辑
  */
 const Mathematics = Node.create({
