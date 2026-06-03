@@ -120,7 +120,9 @@
             background: #f3f4f6; font-weight: 700; font-size: 0.75rem; 
             color: #374151; text-align: center; user-select: none;
         }
-        .excel-table td:focus { background: #eff6ff; box-shadow: inset 0 0 0 2px #3b82f6; }
+        .excel-table td.excel-active { background: #eff6ff; box-shadow: inset 0 0 0 2px #3b82f6; }
+        .excel-table td.excel-selected { background: #dbeafe; }
+        .excel-table td.excel-range-start { background: #eff6ff; box-shadow: inset 0 0 0 2px #2563eb; }
         .excel-table td:hover { background: #f9fafb; }
         .excel-toolbar { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 0; margin-bottom: 12px; }
         .excel-btn { 
@@ -338,12 +340,14 @@
                                                 <td v-for="(_, ci) in excelCols" :key="ci" 
                                                     contenteditable="true"
                                                     @blur="excelUpdateCell(ri, ci, $event)"
+                                                    @click="excelCellClick(ri, ci, $event)"
                                                     @keydown.tab.prevent="excelTabNext(ri, ci)"
                                                     @keydown.enter.prevent="excelEnterNext(ri, ci)"
+                                                    @keydown="excelCellKeydown(ri, ci, $event)"
                                                     @dblclick="excelSelectCell($event)"
                                                     @paste.prevent="excelHandlePaste(ri, ci, $event)"
                                                     :data-ri="ri" :data-ci="ci"
-                                                    class="min-w-[80px] whitespace-pre-wrap"
+                                                    :class="excelCellClass(ri, ci)"
                                                 >{{ excelGetCell(ri, ci) }}</td>
                                             </tr>
                                         </tbody>
@@ -351,7 +355,7 @@
                                 </div>
                                 <div class="text-xs text-gray-400 mt-3 flex items-center space-x-4">
                                     <span>📊 {{ excelData.length }} 行 × {{ excelCols }} 列</span>
-                                    <span>💡 粘贴 Tab/换行数据自动智能拆分行列 · Tab 切换 · Enter 下一行</span>
+                                    <span>💡 单击选中 · Shift+单击连续选 · Ctrl+C/V 复制粘贴 · Ctrl+A 全选 · Tab/Enter 切换</span>
                                 </div>
                             </div>
 
@@ -387,6 +391,8 @@
                 const excelFileInput = ref(null)
                 const excelData = ref([])
                 const excelCols = ref(5)
+                const excelSelCell = ref(null) // {ri, ci} of selected cell
+                const excelSelRange = ref(null) // {startRi, startCi, endRi, endCi} for multi-cell
 
                 // Mode definitions
                 const modes = [
@@ -633,6 +639,169 @@
                     excelData.value = [...excelData.value]
                 }
 
+                // ======== Excel 选区与复制粘贴 ========
+                const excelCellClass = (ri, ci) => {
+                    const classes = ['min-w-[80px]', 'whitespace-pre-wrap']
+                    if (excelSelCell.value && excelSelCell.value.ri === ri && excelSelCell.value.ci === ci) {
+                        classes.push('excel-active')
+                    }
+                    if (excelIsInRange(ri, ci)) {
+                        if (!(excelSelCell.value && excelSelCell.value.ri === ri && excelSelCell.value.ci === ci)) {
+                            classes.push('excel-selected')
+                        }
+                    }
+                    return classes
+                }
+
+                const excelIsInRange = (ri, ci) => {
+                    const r = excelSelRange.value
+                    if (!r) return false
+                    const minRi = Math.min(r.startRi, r.endRi)
+                    const maxRi = Math.max(r.startRi, r.endRi)
+                    const minCi = Math.min(r.startCi, r.endCi)
+                    const maxCi = Math.max(r.startCi, r.endCi)
+                    return ri >= minRi && ri <= maxRi && ci >= minCi && ci <= maxCi
+                }
+
+                const excelCellClick = (ri, ci, event) => {
+                    if (event.shiftKey && excelSelCell.value) {
+                        // Shift+click: extend range
+                        excelSelRange.value = {
+                            startRi: excelSelCell.value.ri,
+                            startCi: excelSelCell.value.ci,
+                            endRi: ri,
+                            endCi: ci
+                        }
+                    } else {
+                        // Single click: set active cell, clear range
+                        excelSelCell.value = { ri, ci }
+                        excelSelRange.value = null
+                    }
+                }
+
+                const excelCellKeydown = (ri, ci, event) => {
+                    if (event.ctrlKey || event.metaKey) {
+                        if (event.key === 'c' || event.key === 'C') {
+                            event.preventDefault()
+                            excelCopySelection()
+                        } else if (event.key === 'v' || event.key === 'V') {
+                            event.preventDefault()
+                            excelPasteToSelection()
+                        } else if (event.key === 'a' || event.key === 'A') {
+                            event.preventDefault()
+                            excelSelectAll()
+                        } else if (event.key === 'x' || event.key === 'X') {
+                            event.preventDefault()
+                            excelCutSelection()
+                        }
+                    }
+                }
+
+                const excelCopySelection = async () => {
+                    let startRi, startCi, endRi, endCi
+                    
+                    if (excelSelRange.value) {
+                        startRi = Math.min(excelSelRange.value.startRi, excelSelRange.value.endRi)
+                        startCi = Math.min(excelSelRange.value.startCi, excelSelRange.value.endCi)
+                        endRi = Math.max(excelSelRange.value.startRi, excelSelRange.value.endRi)
+                        endCi = Math.max(excelSelRange.value.startCi, excelSelRange.value.endCi)
+                    } else if (excelSelCell.value) {
+                        startRi = endRi = excelSelCell.value.ri
+                        startCi = endCi = excelSelCell.value.ci
+                    } else {
+                        return
+                    }
+
+                    // Build TSV rows
+                    const rows = []
+                    for (let r = startRi; r <= endRi; r++) {
+                        const cells = []
+                        for (let c = startCi; c <= endCi; c++) {
+                            cells.push(excelGetCell(r, c))
+                        }
+                        rows.push(cells.join('\t'))
+                    }
+                    const tsv = rows.join('\n')
+
+                    try {
+                        await navigator.clipboard.writeText(tsv)
+                    } catch(e) {
+                        // Fallback
+                        const ta = document.createElement('textarea')
+                        ta.value = tsv
+                        document.body.appendChild(ta)
+                        ta.select()
+                        document.execCommand('copy')
+                        document.body.removeChild(ta)
+                    }
+                }
+
+                const excelCutSelection = async () => {
+                    await excelCopySelection()
+                    // Clear selected cells
+                    let startRi, startCi, endRi, endCi
+                    if (excelSelRange.value) {
+                        startRi = Math.min(excelSelRange.value.startRi, excelSelRange.value.endRi)
+                        startCi = Math.min(excelSelRange.value.startCi, excelSelRange.value.endCi)
+                        endRi = Math.max(excelSelRange.value.startRi, excelSelRange.value.endRi)
+                        endCi = Math.max(excelSelRange.value.startCi, excelSelRange.value.endCi)
+                    } else if (excelSelCell.value) {
+                        startRi = endRi = excelSelCell.value.ri
+                        startCi = endCi = excelSelCell.value.ci
+                    } else { return }
+
+                    for (let r = startRi; r <= endRi; r++) {
+                        for (let c = startCi; c <= endCi; c++) {
+                            if (excelData.value[r]) excelData.value[r][c] = ''
+                        }
+                    }
+                    excelData.value = [...excelData.value]
+                }
+
+                const excelPasteToSelection = async () => {
+                    if (!excelSelCell.value) return
+                    
+                    let text
+                    try {
+                        text = await navigator.clipboard.readText()
+                    } catch(e) {
+                        return
+                    }
+                    if (!text) return
+
+                    const { ri, ci } = excelSelCell.value
+                    const rows = text.split(/\r?\n/)
+                    if (rows.length > 1 && rows[rows.length-1] === '') rows.pop()
+
+                    rows.forEach((rowData, rowOffset) => {
+                        const cols = rowData.split('\t')
+                        const targetRow = ri + rowOffset
+                        while (excelData.value.length <= targetRow) {
+                            excelData.value.push(new Array(excelCols.value).fill(''))
+                        }
+                        cols.forEach((cellData, colOffset) => {
+                            const targetCol = ci + colOffset
+                            while (excelData.value[targetRow].length <= targetCol) {
+                                excelData.value[targetRow].push('')
+                                if (targetCol >= excelCols.value) excelCols.value = targetCol + 1
+                            }
+                            excelData.value[targetRow][targetCol] = cellData
+                        })
+                    })
+                    excelData.value = [...excelData.value]
+                }
+
+                const excelSelectAll = () => {
+                    if (excelData.value.length === 0) return
+                    excelSelCell.value = { ri: 0, ci: 0 }
+                    excelSelRange.value = {
+                        startRi: 0,
+                        startCi: 0,
+                        endRi: excelData.value.length - 1,
+                        endCi: excelCols.value - 1
+                    }
+                }
+
                 const excelSelectCell = (e) => {
                     // select all text in cell on double click
                     const range = document.createRange()
@@ -658,7 +827,11 @@
 
                 const excelFocusCell = (ri, ci) => {
                     const cell = document.querySelector(`td[data-ri="${ri}"][data-ci="${ci}"]`)
-                    if (cell) { cell.focus(); excelSelectCell({ target: cell }) }
+                    if (cell) { 
+                        cell.focus(); 
+                        excelSelCell.value = { ri, ci }
+                        excelSelRange.value = null
+                    }
                 }
 
                 const excelAddRow = () => {
@@ -804,6 +977,7 @@
                     excelTabNext, excelEnterNext, excelAddRow, excelAddRowAbove,
                     excelDeleteRow, excelDeleteRowAt, excelAddCol, excelAddColBefore,
                     excelDeleteCol, excelDeleteColAt, excelExportXLSX, excelImportXLSX,
+                    excelCellClass, excelCellClick, excelCellKeydown,
                     excelHandlePaste, excelHandleImport, getExcelRowCount, typeLabel,
                     formatDate, generateStarStyle
                 }
