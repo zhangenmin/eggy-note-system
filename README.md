@@ -101,34 +101,42 @@ python3 main.py
 
 ## 🐳 Docker 部署（推荐）
 
-一键部署，无需手动安装依赖和配置数据库。
+### 方法一：一条命令（无需克隆项目）
 
-### 前提条件
-- [Docker](https://docs.docker.com/engine/install/) (20.10+)
-- [Docker Compose](https://docs.docker.com/compose/install/) (v2.0+)
+```bash
+# 只需要有 Docker，一行启动
+bash <(curl -fsSL https://raw.githubusercontent.com/zhangenmin/eggy-note-system/main/docker-run.sh)
+```
 
-### 部署步骤
+### 方法二：docker-compose（推荐）
 
 ```bash
 # 1. 克隆项目
 git clone https://github.com/zhangenmin/eggy-note-system.git
 cd eggy-note-system
 
-# 2. 构建并启动（首次需下载镜像，约1-2分钟）
+# 2. 构建并启动（首次约1-2分钟）
 docker compose up -d
 
-# 3. 查看启动日志
-docker compose logs -f
-
-# 4. 打开浏览器访问
+# 3. 打开浏览器访问
 # http://localhost:8080
 ```
+
+### 方法三：纯 docker run
+
+```bash
+# 克隆+构建+启动一步到位
+bash run.sh
+```
+
+> 默认登录账号：`parent` / `Jschrj83130911!`
+> 默认端口：`8080`，可通过 `APP_PORT=8888 bash run.sh` 自定义
 
 ### 架构说明
 
 ```
 ┌─────────────────────────────────────┐
-│  docker-compose.yml                 │
+│  docker-compose.yml / docker run    │
 │  ┌──────────────┐  ┌──────────────┐ │
 │  │ chuhuai-     │  │ chuhuai-     │ │
 │  │ mysql        │◄─┤ note (app)   │ │
@@ -140,13 +148,6 @@ docker compose logs -f
 └─────────────────────────────────────┘
 ```
 
-### 服务详情
-
-| 服务 | 容器名 | 镜像 | 端口 |
-|------|--------|------|------|
-| **App** | `chuhuai-note` | 自动构建 | `8080:80` |
-| **MySQL** | `chuhuai-mysql` | `mysql:8.0` | `3306` (内部) |
-
 ### 环境变量
 
 | 变量 | 默认值 | 说明 |
@@ -155,6 +156,7 @@ docker compose logs -f
 | `MYSQL_USER` | `root` | 数据库用户 |
 | `MYSQL_PASSWORD` | `Jschrj83130911!` | 数据库密码 |
 | `MYSQL_DB` | `eggy_note` | 数据库名 |
+| `APP_PORT` | `8080` | 宿主机端口 |
 
 ### Docker 文件
 
@@ -162,9 +164,12 @@ docker compose logs -f
 |------|------|
 | `Dockerfile` | Ubuntu 24.04 + Nginx + Python 虚拟环境 |
 | `docker-compose.yml` | MySQL 8.0 + App 服务编排 |
+| `docker-run.sh` | curl \| bash 一键部署脚本 |
+| `run.sh` | 本地克隆后一键启动 |
 | `nginx.conf` | 反向代理 / 静态文件服务 |
-| `start.sh` | 启动脚本（等待 MySQL → 初始化 → 启动服务） |
-| `.dockerignore` | 构建排除 venv/、pycache/ |
+| `start.sh` | 容器启动脚本 |
+| `.dockerignore` | 构建排除 |
+| `.github/workflows/docker-publish.yml` | GitHub Actions 自动构建镜像到 ghcr.io |
 
 ## 📂 项目结构
 ```
@@ -182,10 +187,15 @@ docker compose logs -f
 ├── deploy/                  # 旧版部署参考
 ├── init_db.sql              # 数据库建表脚本
 ├── Dockerfile               # 镜像构建
-├── docker-compose.yml       # 容器编排
+├── docker-compose.yml       # docker-compose 编排
+├── docker-run.sh            # curl | bash 一键脚本
+├── run.sh                   # git clone 后一键启动
 ├── nginx.conf               # Nginx 配置
 ├── start.sh                 # 容器启动脚本
 ├── .dockerignore            # Docker 构建排除
+├── .github/
+│   └── workflows/
+│       └── docker-publish.yml  # GitHub Actions 自动构建
 └── README.md
 ```
 
